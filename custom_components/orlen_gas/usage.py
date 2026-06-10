@@ -2,6 +2,16 @@ from datetime import datetime
 from collections import defaultdict
 
 
+def _parse_date(date_str):
+    """Parsuje datę ISO z opcjonalnym 'Z' na końcu."""
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 def invoice_is_consumption(invoice):
     """
     Pomijamy:
@@ -9,7 +19,6 @@ def invoice_is_consumption(invoice):
     - korekty
     - rekordy bez zużycia
     """
-
     if invoice.get("WearKWH", 0) <= 0:
         return False
 
@@ -23,6 +32,9 @@ def build_monthly_usage(invoice_list):
     """
     Zamienia faktury ORLEN na zużycie miesięczne.
 
+    WearM3 z każdej faktury przypisywane jest bezpośrednio
+    do miesiąca z EndDate (bez rozkładu na dni).
+
     Zwraca:
     {
         "2025-04": 75.0,
@@ -30,51 +42,22 @@ def build_monthly_usage(invoice_list):
         ...
     }
     """
-
     monthly = defaultdict(float)
 
     for invoice in invoice_list:
-
         if not invoice_is_consumption(invoice):
             continue
 
-        start_date = invoice.get("StartDate")
-        end_date = invoice.get("EndDate")
-
         usage = invoice.get("WearM3")
-
         if usage is None:
             continue
 
-        try:
-            start = datetime.fromisoformat(
-                start_date.replace("Z", "+00:00")
-            )
-
-            end = datetime.fromisoformat(
-                end_date.replace("Z", "+00:00")
-            )
-
-        except Exception:
+        end = _parse_date(invoice.get("EndDate"))
+        if end is None:
             continue
 
-        days = (end - start).days + 1
-
-        if days <= 0:
-            continue
-
-        daily_usage = usage / days
-
-        current = start
-
-        while current <= end:
-
-            month_key = current.strftime("%Y-%m")
-
-            monthly[month_key] += daily_usage
-
-            current = current.replace(day=current.day) + \
-                __import__("datetime").timedelta(days=1)
+        month_key = end.strftime("%Y-%m")
+        monthly[month_key] += usage
 
     return {
         month: round(value, 1)
@@ -86,10 +69,8 @@ def detect_settlements(monthly_usage):
     """
     Wykrywa wyrównania.
 
-    MVP:
-    miesiąc > 3x średnia
+    MVP: miesiąc > 3x średnia
     """
-
     values = list(monthly_usage.values())
 
     if not values:
@@ -97,18 +78,14 @@ def detect_settlements(monthly_usage):
 
     average = sum(values) / len(values)
 
-    settlements = []
-
-    for month, value in monthly_usage.items():
-
-        if value > average * 3:
-            settlements.append(month)
-
-    return settlements
+    return [
+        month
+        for month, value in monthly_usage.items()
+        if value > average * 3
+    ]
 
 
 def build_statistics(monthly_usage):
-
     values = list(monthly_usage.values())
 
     if not values:
@@ -123,12 +100,12 @@ def build_statistics(monthly_usage):
         "min_month": min(values),
     }
 
+
 def build_usage_data(invoice_list):
     """
     Główna funkcja wywoływana przez coordinator.
     Zwraca słownik gotowy do przekazania sensorom.
     """
-
     monthly_usage = build_monthly_usage(invoice_list)
     settlements = detect_settlements(monthly_usage)
     statistics = build_statistics(monthly_usage)

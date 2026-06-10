@@ -7,7 +7,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .api import OrlenGasApi, AuthError, ApiError
-from .usage import build_usage_data
+from .usage import build_usage_data, invoice_is_consumption
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,7 +44,8 @@ class OrlenGasCoordinator(DataUpdateCoordinator):
         invoice_list = invoices_data.get("InvoicesList", [])
         usage = build_usage_data(invoice_list)
 
-        last_invoice = invoice_list[0] if invoice_list else None
+        consumption_invoices = [i for i in invoice_list if invoice_is_consumption(i)]
+        last_invoice = consumption_invoices[0] if consumption_invoices else None
 
         return {
             **usage,
