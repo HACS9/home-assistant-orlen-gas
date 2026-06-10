@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ORLEN Gas – login",
+        "description": "Podaj dane logowania do konta myORLEN (ebok.myorlen.pl).",
+        "data": {
+          "email": "Adres e-mail",
+          "password": "Hasło"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Nieprawidłowy adres e-mail lub hasło.",
+      "cannot_connect": "Nie można połączyć się z serwerem myORLEN. Sprawdź połączenie internetowe.",
+      "unknown": "Nieoczekiwany błąd. Sprawdź logi Home Assistant."
+    },
+    "abort": {
+      "already_configured": "To konto jest już skonfigurowane."
+    }
+  }
+}

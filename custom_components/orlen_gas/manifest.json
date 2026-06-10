@@ -1,0 +1,16 @@
+{
+  "domain": "orlen_gas",
+  "name": "ORLEN Gas",
+  "version": "0.1.0",
+  "documentation": "https://github.com/HACS9/home-assistant-orlen-gas",
+  "issue_tracker": "https://github.com/HACS9/home-assistant-orlen-gas/issues",
+  "dependencies": [],
+  "codeowners": [
+    "@HACS9"
+  ],
+  "requirements": [
+    "requests>=2.31.0"
+  ],
+  "config_flow": true,
+  "iot_class": "cloud_polling"
+}
