@@ -27,22 +27,19 @@ class OrlenGasApi:
         Wywoływane raz — przy konfiguracji i po wygaśnięciu tokena.
         """
         url = f"{BASE_URL}/auth/login?api-version=3.0"
-
         payload = {
             "identificator": self.email,
             "accessPin": self.password,
             "rememberLogin": False,
-            "DeviceId": "homeassistant",
-            "DeviceName": "Home Assistant",
-            "DeviceType": "HomeAssistant",
+            "DeviceId": "123",
+            "DeviceName": "Python Test",
+            "DeviceType": "Web",
         }
-
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "HomeAssistant/OrlenGas",
+            "User-Agent": "Mozilla/5.0",
         }
-
         try:
             response = self.session.post(
                 url,
@@ -60,7 +57,6 @@ class OrlenGasApi:
 
         data = response.json()
         token = data.get("Token")
-
         if not token:
             raise AuthError("Brak tokena w odpowiedzi API")
 
@@ -81,7 +77,6 @@ class OrlenGasApi:
             "Accept": "application/json",
             "AuthToken": self.token,
         }
-
         try:
             response = self.session.get(url, headers=headers, timeout=30)
         except requests.RequestException as err:
