@@ -6,7 +6,7 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfVolume
+from homeassistant.const import UnitOfEnergy, UnitOfVolume
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
@@ -25,13 +25,16 @@ async def async_setup_entry(hass, entry, async_add_entities):
         # Ostatnia faktura
         OrlenGasLastInvoiceAmountSensor(coordinator),
         OrlenGasLastInvoiceDateSensor(coordinator),
-        # Roczne zużycie (suma 12 miesięcy)
+        # Roczne zużycie m³ / kWh / PLN
         OrlenGasYearConsumptionSensor(coordinator),
-        # Miesięczne zużycie — ostatnie 12 miesięcy
-        *[
-            OrlenGasMonthSensor(coordinator, offset)
-            for offset in range(12)
-        ],
+        OrlenGasYearKwhSensor(coordinator),
+        OrlenGasYearCostSensor(coordinator),
+        # Miesięczne zużycie m³ — ostatnie 12 miesięcy
+        *[OrlenGasMonthSensor(coordinator, offset) for offset in range(12)],
+        # Miesięczne zużycie kWh — ostatnie 12 miesięcy
+        *[OrlenGasMonthKwhSensor(coordinator, offset) for offset in range(12)],
+        # Miesięczny koszt PLN — ostatnie 12 miesięcy
+        *[OrlenGasMonthCostSensor(coordinator, offset) for offset in range(12)],
     ]
 
     async_add_entities(entities)
@@ -53,6 +56,10 @@ class _OrlenGasBase(CoordinatorEntity, SensorEntity):
         }
 
 
+# ---------------------------------------------------------------------------
+# Saldo
+# ---------------------------------------------------------------------------
+
 class OrlenGasBalanceSensor(_OrlenGasBase):
     _attr_name = "ORLEN Gas Saldo"
     _attr_unique_id = "orlen_gas_balance"
@@ -64,6 +71,10 @@ class OrlenGasBalanceSensor(_OrlenGasBase):
     def native_value(self):
         return self.coordinator.data.get("balance")
 
+
+# ---------------------------------------------------------------------------
+# Faktury
+# ---------------------------------------------------------------------------
 
 class OrlenGasLastInvoiceAmountSensor(_OrlenGasBase):
     _attr_name = "ORLEN Gas Ostatnia faktura"
@@ -117,6 +128,10 @@ class OrlenGasLastInvoiceDateSensor(_OrlenGasBase):
             return None
 
 
+# ---------------------------------------------------------------------------
+# Roczne agregaty
+# ---------------------------------------------------------------------------
+
 class OrlenGasYearConsumptionSensor(_OrlenGasBase):
     _attr_name = "ORLEN Gas Zużycie roczne"
     _attr_unique_id = "orlen_gas_year_consumption"
@@ -141,6 +156,35 @@ class OrlenGasYearConsumptionSensor(_OrlenGasBase):
             "settlement_months": settlements,
         }
 
+
+class OrlenGasYearKwhSensor(_OrlenGasBase):
+    _attr_name = "ORLEN Gas Zużycie roczne kWh"
+    _attr_unique_id = "orlen_gas_year_kwh"
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_icon = "mdi:lightning-bolt"
+
+    @property
+    def native_value(self):
+        return self.coordinator.data.get("statistics", {}).get("sum_12_months_kwh")
+
+
+class OrlenGasYearCostSensor(_OrlenGasBase):
+    _attr_name = "ORLEN Gas Koszt roczny"
+    _attr_unique_id = "orlen_gas_year_cost"
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_icon = "mdi:cash-multiple"
+
+    @property
+    def native_value(self):
+        return self.coordinator.data.get("statistics", {}).get("sum_12_months_pln")
+
+
+# ---------------------------------------------------------------------------
+# Miesięczne zużycie m³
+# ---------------------------------------------------------------------------
 
 class OrlenGasMonthSensor(_OrlenGasBase):
     _attr_device_class = SensorDeviceClass.GAS
@@ -167,7 +211,7 @@ class OrlenGasMonthSensor(_OrlenGasBase):
 
     def _get_month_entry(self):
         monthly = self.coordinator.data.get("monthly_usage", {})
-        items = sorted(monthly.items())  # lista (month_key, value)
+        items = sorted(monthly.items())
         idx = -(self._month_offset + 1)
         if len(items) < abs(idx):
             return None, None
@@ -188,6 +232,101 @@ class OrlenGasMonthSensor(_OrlenGasBase):
             "is_settlement": key in settlements if key else False,
         }
 
+
+# ---------------------------------------------------------------------------
+# Miesięczne zużycie kWh
+# ---------------------------------------------------------------------------
+
+class OrlenGasMonthKwhSensor(_OrlenGasBase):
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_icon = "mdi:lightning-bolt"
+
+    def __init__(self, coordinator, month_offset: int):
+        super().__init__(coordinator)
+        self._month_offset = month_offset
+
+        if month_offset == 0:
+            label = "biezacy_miesiac"
+            name = "ORLEN Gas kWh bieżący miesiąc"
+        elif month_offset == 1:
+            label = "poprzedni_miesiac"
+            name = "ORLEN Gas kWh poprzedni miesiąc"
+        else:
+            label = f"miesiac_minus_{month_offset}"
+            name = f"ORLEN Gas kWh miesiąc -{month_offset}"
+
+        self._attr_unique_id = f"orlen_gas_{label}_kwh"
+        self._attr_name = name
+
+    def _get_entry(self):
+        monthly = self.coordinator.data.get("monthly_kwh", {})
+        items = sorted(monthly.items())
+        idx = -(self._month_offset + 1)
+        if len(items) < abs(idx):
+            return None, None
+        return items[idx]
+
+    @property
+    def native_value(self):
+        _, value = self._get_entry()
+        return value
+
+    @property
+    def extra_state_attributes(self):
+        key, _ = self._get_entry()
+        return {"month": key}
+
+
+# ---------------------------------------------------------------------------
+# Miesięczny koszt PLN
+# ---------------------------------------------------------------------------
+
+class OrlenGasMonthCostSensor(_OrlenGasBase):
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = "PLN"
+    _attr_icon = "mdi:cash"
+
+    def __init__(self, coordinator, month_offset: int):
+        super().__init__(coordinator)
+        self._month_offset = month_offset
+
+        if month_offset == 0:
+            label = "biezacy_miesiac"
+            name = "ORLEN Gas Koszt bieżący miesiąc"
+        elif month_offset == 1:
+            label = "poprzedni_miesiac"
+            name = "ORLEN Gas Koszt poprzedni miesiąc"
+        else:
+            label = f"miesiac_minus_{month_offset}"
+            name = f"ORLEN Gas Koszt miesiąc -{month_offset}"
+
+        self._attr_unique_id = f"orlen_gas_{label}_pln"
+        self._attr_name = name
+
+    def _get_entry(self):
+        monthly = self.coordinator.data.get("monthly_costs", {})
+        items = sorted(monthly.items())
+        idx = -(self._month_offset + 1)
+        if len(items) < abs(idx):
+            return None, None
+        return items[idx]
+
+    @property
+    def native_value(self):
+        _, value = self._get_entry()
+        return value
+
+    @property
+    def extra_state_attributes(self):
+        key, _ = self._get_entry()
+        return {"month": key}
+
+
+# ---------------------------------------------------------------------------
+# Stan licznika
+# ---------------------------------------------------------------------------
 
 class OrlenGasMeterReadingSensor(_OrlenGasBase):
     """

@@ -21,20 +21,16 @@ def invoice_is_consumption(invoice):
     """
     if invoice.get("WearKWH", 0) <= 0:
         return False
-
     if invoice.get("Type") != "PPG":
         return False
-
     return True
 
 
 def build_monthly_usage(invoice_list):
     """
     Zamienia faktury ORLEN na zużycie miesięczne.
-
     WearM3 z każdej faktury przypisywane jest bezpośrednio
     do miesiąca z EndDate (bez rozkładu na dni).
-
     Zwraca:
     {
         "2025-04": 75.0,
@@ -43,22 +39,63 @@ def build_monthly_usage(invoice_list):
     }
     """
     monthly = defaultdict(float)
-
     for invoice in invoice_list:
         if not invoice_is_consumption(invoice):
             continue
-
         usage = invoice.get("WearM3")
         if usage is None:
             continue
-
         end = _parse_date(invoice.get("EndDate"))
         if end is None:
             continue
-
         month_key = end.strftime("%Y-%m")
         monthly[month_key] += usage
+    return {
+        month: round(value, 1)
+        for month, value in sorted(monthly.items())
+    }
 
+
+def build_monthly_costs(invoice_list):
+    """
+    Miesięczny koszt brutto (PLN) z faktur.
+    Zwraca: {"2025-04": 312.50, ...}
+    """
+    monthly = defaultdict(float)
+    for invoice in invoice_list:
+        if not invoice_is_consumption(invoice):
+            continue
+        amount = invoice.get("GrossAmount")
+        if amount is None:
+            continue
+        end = _parse_date(invoice.get("EndDate"))
+        if end is None:
+            continue
+        month_key = end.strftime("%Y-%m")
+        monthly[month_key] += amount
+    return {
+        month: round(value, 2)
+        for month, value in sorted(monthly.items())
+    }
+
+
+def build_monthly_kwh(invoice_list):
+    """
+    Miesięczne zużycie kWh z faktur.
+    Zwraca: {"2025-04": 820.0, ...}
+    """
+    monthly = defaultdict(float)
+    for invoice in invoice_list:
+        if not invoice_is_consumption(invoice):
+            continue
+        kwh = invoice.get("WearKWH")
+        if kwh is None:
+            continue
+        end = _parse_date(invoice.get("EndDate"))
+        if end is None:
+            continue
+        month_key = end.strftime("%Y-%m")
+        monthly[month_key] += kwh
     return {
         month: round(value, 1)
         for month, value in sorted(monthly.items())
@@ -68,16 +105,12 @@ def build_monthly_usage(invoice_list):
 def detect_settlements(monthly_usage):
     """
     Wykrywa wyrównania.
-
     MVP: miesiąc > 3x średnia
     """
     values = list(monthly_usage.values())
-
     if not values:
         return []
-
     average = sum(values) / len(values)
-
     return [
         month
         for month, value in monthly_usage.items()
@@ -85,13 +118,12 @@ def detect_settlements(monthly_usage):
     ]
 
 
-def build_statistics(monthly_usage):
+def build_statistics(monthly_usage, monthly_costs=None, monthly_kwh=None):
     values = list(monthly_usage.values())
-
     if not values:
         return {}
 
-    return {
+    stats = {
         "current_month": values[-1],
         "last_month": values[-2] if len(values) > 1 else None,
         "sum_12_months": round(sum(values[-12:]), 1),
@@ -100,6 +132,16 @@ def build_statistics(monthly_usage):
         "min_month": min(values),
     }
 
+    if monthly_costs:
+        cost_values = list(monthly_costs.values())
+        stats["sum_12_months_pln"] = round(sum(cost_values[-12:]), 2)
+
+    if monthly_kwh:
+        kwh_values = list(monthly_kwh.values())
+        stats["sum_12_months_kwh"] = round(sum(kwh_values[-12:]), 1)
+
+    return stats
+
 
 def build_usage_data(invoice_list):
     """
@@ -107,11 +149,14 @@ def build_usage_data(invoice_list):
     Zwraca słownik gotowy do przekazania sensorom.
     """
     monthly_usage = build_monthly_usage(invoice_list)
+    monthly_costs = build_monthly_costs(invoice_list)
+    monthly_kwh = build_monthly_kwh(invoice_list)
     settlements = detect_settlements(monthly_usage)
-    statistics = build_statistics(monthly_usage)
-
+    statistics = build_statistics(monthly_usage, monthly_costs, monthly_kwh)
     return {
         "monthly_usage": monthly_usage,
+        "monthly_costs": monthly_costs,
+        "monthly_kwh": monthly_kwh,
         "settlements": settlements,
         "statistics": statistics,
     }
