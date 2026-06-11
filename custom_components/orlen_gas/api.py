@@ -106,7 +106,7 @@ class OrlenGasApi:
         """
         return self._get(
             f"/crm/get-all-ppg-readings-for-meter"
-            f"?idPpg={ppg_id}&api-version=3.0"
+            f"?pageSize=500&pageNumber=1&api-version=3.0&idPpg={ppg_id}"
         )
 
 
