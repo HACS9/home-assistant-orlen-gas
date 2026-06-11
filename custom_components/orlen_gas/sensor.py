@@ -56,8 +56,7 @@ class _OrlenGasBase(CoordinatorEntity, SensorEntity):
 class OrlenGasBalanceSensor(_OrlenGasBase):
     _attr_name = "ORLEN Gas Saldo"
     _attr_unique_id = "orlen_gas_balance"
-    _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "PLN"
     _attr_icon = "mdi:cash"
 
@@ -69,8 +68,7 @@ class OrlenGasBalanceSensor(_OrlenGasBase):
 class OrlenGasLastInvoiceAmountSensor(_OrlenGasBase):
     _attr_name = "ORLEN Gas Ostatnia faktura"
     _attr_unique_id = "orlen_gas_last_invoice_amount"
-    _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = "PLN"
     _attr_icon = "mdi:file-document-outline"
 
