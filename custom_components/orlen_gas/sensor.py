@@ -35,6 +35,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
         *[OrlenGasMonthKwhSensor(coordinator, offset) for offset in range(12)],
         # Miesięczny koszt PLN — ostatnie 12 miesięcy
         *[OrlenGasMonthCostSensor(coordinator, offset) for offset in range(12)],
+        # Wykres 12 miesięcy (dane dla ApexCharts)
+        OrlenGasChartSensor(coordinator),
     ]
 
     async_add_entities(entities)
@@ -344,3 +346,44 @@ class OrlenGasMeterReadingSensor(_OrlenGasBase):
     @property
     def native_value(self):
         return self.coordinator.data.get("meter_reading")
+
+
+# ---------------------------------------------------------------------------
+# Wykres 12 miesięcy (dane dla ApexCharts)
+# ---------------------------------------------------------------------------
+
+class OrlenGasChartSensor(_OrlenGasBase):
+    """
+    Sensor agregujący dane miesięczne (m³, kWh, PLN) do użycia w ApexCharts.
+    Zastępuje ręczny template sensor z configuration.yaml.
+    """
+    _attr_name = "ORLEN Gas Wykres 12 miesięcy"
+    _attr_unique_id = "orlen_gas_chart_12months"
+    _attr_icon = "mdi:chart-bar"
+
+    @property
+    def native_value(self):
+        return "ok"
+
+    @property
+    def extra_state_attributes(self):
+        monthly_usage = self.coordinator.data.get("monthly_usage", {})
+        monthly_costs = self.coordinator.data.get("monthly_costs", {})
+        monthly_kwh = self.coordinator.data.get("monthly_kwh", {})
+
+        # Zbiór wszystkich miesięcy z dowolnego źródła, posortowany
+        all_months = sorted(
+            set(monthly_usage) | set(monthly_costs) | set(monthly_kwh)
+        )[-12:]
+
+        return {
+            "data": [
+                {
+                    "month": month,
+                    "m3": monthly_usage.get(month),
+                    "pln": monthly_costs.get(month),
+                    "kwh": monthly_kwh.get(month),
+                }
+                for month in all_months
+            ]
+        }
