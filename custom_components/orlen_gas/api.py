@@ -98,6 +98,18 @@ class OrlenGasApi:
     def get_ppg_list(self):
         return self._get("/crm/get-ppg-list?api-version=3.0")
 
+    def get_meter_readings(self, ppg_id: str):
+        """
+        Pobiera historię odczytów licznika dla danego PPG.
+        Endpoint: /crm/get-all-ppg-readings-for-meter
+        Zwraca listę odczytów, każdy z polami Value, Type, ReadingDateLocal.
+        """
+        return self._get(
+            f"/crm/get-all-ppg-readings-for-meter"
+            f"?idPpg={ppg_id}&api-version=3.0"
+        )
+
+
     def get_invoices(self):
         return self._get(
             "/crm/get-invoices-v2"

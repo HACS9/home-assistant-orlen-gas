@@ -36,10 +36,40 @@ class OrlenGasCoordinator(DataUpdateCoordinator):
             balance_data = await self.hass.async_add_executor_job(
                 self.api.get_balance
             )
+            ppg_list_data = await self.hass.async_add_executor_job(
+                self.api.get_ppg_list
+            )
         except AuthError as err:
             raise UpdateFailed(f"Błąd autoryzacji: {err}") from err
         except ApiError as err:
             raise UpdateFailed(f"Błąd API: {err}") from err
+
+        # Pobierz ppg_id z listy PPG
+        ppg_id = None
+        ppg_list = ppg_list_data if isinstance(ppg_list_data, list) else ppg_list_data.get("PpgList", [])
+        if ppg_list:
+            ppg_id = ppg_list[0].get("IdPPG") or ppg_list[0].get("Id")
+
+        # Pobierz odczyty licznika dla Energy Dashboard
+        meter_reading = None
+        if ppg_id:
+            try:
+                readings_data = await self.hass.async_add_executor_job(
+                    self.api.get_meter_readings, ppg_id
+                )
+                # Filtruj — tylko rzeczywiste odczyty (nie szacunkowe)
+                VALID_TYPES = {"Receiver", "RealCorrect"}
+                readings = readings_data if isinstance(readings_data, list) else readings_data.get("MeterReadings", [])
+                real_readings = [
+                    r for r in readings
+                    if r.get("Type") in VALID_TYPES and r.get("Value") is not None
+                ]
+                if real_readings:
+                    # Posortuj po dacie, weź najnowszy
+                    real_readings.sort(key=lambda r: r.get("ReadingDateLocal", ""), reverse=True)
+                    meter_reading = real_readings[0].get("Value")
+            except (AuthError, ApiError) as err:
+                _LOGGER.warning("Nie udało się pobrać odczytów licznika: %s", err)
 
         invoice_list = invoices_data.get("InvoicesList", [])
         usage = build_usage_data(invoice_list)
@@ -51,4 +81,5 @@ class OrlenGasCoordinator(DataUpdateCoordinator):
             **usage,
             "balance": balance_data.get("Value"),
             "last_invoice": last_invoice,
+            "meter_reading": meter_reading,
         }

@@ -18,6 +18,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = hass.data[DOMAIN][entry.entry_id]
 
     entities = [
+        # Stan licznika (Energy Dashboard)
+        OrlenGasMeterReadingSensor(coordinator),
         # Saldo
         OrlenGasBalanceSensor(coordinator),
         # Ostatnia faktura
@@ -187,3 +189,21 @@ class OrlenGasMonthSensor(_OrlenGasBase):
             "month": key,
             "is_settlement": key in settlements if key else False,
         }
+
+
+class OrlenGasMeterReadingSensor(_OrlenGasBase):
+    """
+    Stan licznika gazu — rosnący odczyt w m³.
+    Używany przez Energy Dashboard (device_class=GAS, state_class=TOTAL_INCREASING).
+    Pobierany z get-all-ppg-readings-for-meter, tylko odczyty Receiver i RealCorrect.
+    """
+    _attr_name = "ORLEN Gas Stan licznika"
+    _attr_unique_id = "orlen_gas_meter_reading"
+    _attr_device_class = SensorDeviceClass.GAS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfVolume.CUBIC_METERS
+    _attr_icon = "mdi:meter-gas"
+
+    @property
+    def native_value(self):
+        return self.coordinator.data.get("meter_reading")

@@ -1,7 +1,7 @@
 {
   "domain": "orlen_gas",
   "name": "ORLEN Gas",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "documentation": "https://github.com/HACS9/home-assistant-orlen-gas",
   "issue_tracker": "https://github.com/HACS9/home-assistant-orlen-gas/issues",
   "dependencies": [],
